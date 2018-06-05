@@ -187,7 +187,7 @@ def extract_point(all_utm_time):
 def find_neighbor(all_point, overlap):
     all_pure_xy = all_point[:, :2]
     tree = cKDTree(all_pure_xy)
-    dis, loc = tree.query(overlap[:, :2], k=1)
+    _, loc = tree.query(overlap[:, :2], k=1)
     return loc
 
 
@@ -280,7 +280,7 @@ def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autove
     offset4seg = id4node
     all_utm_time[:, -1] = np.array(range(len(all_utm_time)))
     all_utm_time_walk = all_utm_time
-    all_utm_time_walk[:, -1] =  all_utm_time_walk[:, -1]* speed
+    all_utm_time_walk[:, -1] = all_utm_time_walk[:, -1] * speed
     # step0-1 calculate the vel of every point
     # With or Without vel
     if autovel == 0:
@@ -339,7 +339,7 @@ def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autove
         for i in range(n_clusters):
             class_index = labels
             same_class_index = np.where(class_index == i)
-            #all_utm_time_walk is for cluster and the useful one is new_all_utm_vel
+            # all_utm_time_walk is for cluster and the useful one is new_all_utm_vel
             same_class_utm = all_pure_utm[list(same_class_index[0])]
             same_class = new_all_utm_vel[list(same_class_index[0])]
             mask4class = rdp(same_class_utm, epsilon=0.02, algo="iter", return_mask=True)
@@ -350,7 +350,7 @@ def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autove
                 all_point = np.vstack((all_point, keypoint4class))
         arg = np.argsort(all_point[:, 3])
         all_point_final = all_point[list(arg)]
-        #all_point_final = all_point
+        # all_point_final = all_point
 
     # step3 delete the latter point in every short segment that length is less than 0.5m
     all_point_final = delete_near_point(all_point_final, 0.5)

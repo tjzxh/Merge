@@ -164,18 +164,27 @@ for d in range(len(overlap_od0)):
                               all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
             if overlap_od0[0][0] != 0:
                 cos0 = cosine_similarity([vector0], [vector4connect])
-                while cos0 < math.cos(10 * math.pi / 180):
+                id0 = 0
+                while cos0[0] < math.cos(10 * math.pi / 180):
+                    id0 += 1
                     ov_st += 1
                     vector4connect = [all_data0[ov_st][0] - all_data0[ov_st - 1][0],
                                       all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
                     cos0 = cosine_similarity([vector0], [vector4connect])
+                    if id0 > 50:
+                        break
             if overlap_od1[0][0] != 0:
+                id1 = 0
                 cos1 = cosine_similarity([vector1], [vector4connect])
-                while cos1 < math.cos(10 * math.pi / 180):
+                while cos1[0] < math.cos(10 * math.pi / 180):
                     ov_st += 1
+                    id1 += 1
+                    cos1_cp = cos1
                     vector4connect = [all_data0[ov_st][0] - all_data0[ov_st - 1][0],
                                       all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
                     cos1 = cosine_similarity([vector1], [vector4connect])
+                    if id1 > 50:
+                        break
             # find another start of overlap in another trajectory
             ov_st1 = process_log.find_neighbor(all_data1, np.array([all_data0[ov_st][0], all_data0[ov_st][1]]).reshape(1, 2))
             ov_st1 = ov_st1[0]
@@ -300,5 +309,5 @@ class MyEncoder(json.JSONEncoder):
             return super(MyEncoder, self).default(obj)
 
 
-with open("0604" + '.hmap', 'w') as f1:
+with open("0605" + '.hmap', 'w') as f1:
     json.dump(hmap, f1, indent=4, cls=MyEncoder)

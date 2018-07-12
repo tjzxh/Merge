@@ -7,13 +7,14 @@ from scipy.linalg import solve
 import json
 import math
 from sklearn.metrics.pairwise import cosine_similarity
+import datetime
 
 gps = 0
 vslam = 0
-all_data0 = process_pcmap("left_out.pcmap", vslam, gps)
+all_data0 = process_pcmap("1.pcmap", vslam, gps)
 all_x0 = all_data0[:, 0]
 all_y0 = all_data0[:, 1]
-all_data1 = process_pcmap("right_out.pcmap", vslam, gps)
+all_data1 = process_pcmap("2.pcmap", vslam, gps)
 all_x1 = all_data1[:, 0]
 all_y1 = all_data1[:, 1]
 width = (max(max(all_x0), max(all_x1)) - min(min(all_x0), min(all_x1))) / 10
@@ -99,16 +100,29 @@ plt.show()
 all_overlap = np.array(all_overlap)
 overlap_od0 = []
 overlap_od1 = []
+
 for j in range(min(all_label), max(all_label) + 1):
     same_class_id = np.where(all_overlap[:, 2] == j)
     same_class = all_overlap[same_class_id]
-    loc0 = process_log.find_neighbor(all_data0, same_class)
-    loc1 = process_log.find_neighbor(all_data1, same_class)
+    _, loc0 = process_log.find_neighbor(all_data0, same_class)
+    _, loc1 = process_log.find_neighbor(all_data1, same_class)
+    st0_cp = min(loc0)
+    st1_cp = min(loc1)
+    ed0_cp = max(loc0)
+    ed1_cp = max(loc1)
     if (loc0[0] - loc0[-1]) * (loc1[0] - loc1[-1]) < 0:
         continue
-    else:
+    elif min(loc0) > st0_cp + 5 and min(loc1) > st1_cp + 5:
         overlap_od0.append([min(loc0), max(loc0)])
         overlap_od1.append([min(loc1), max(loc1)])
+    else:
+        if overlap_od0:
+            overlap_od0.remove(overlap_od0[-1])
+        if overlap_od1:
+            overlap_od1.remove(overlap_od1[-1])
+        overlap_od0.append([min(st0_cp, min(loc0)), max(max(loc0), ed0_cp)])
+        overlap_od1.append([min(st1_cp, min(loc1)), max(max(loc1), ed1_cp)])
+
 # overlap seg
 fig = plt.figure()
 
@@ -146,6 +160,10 @@ id4connect1 = 0
 # if the original point of overlap is the first point of trajectory
 for d in range(len(overlap_od0)):
     if d == 0:
+        if process_log.distance(all_data0[overlap_od0[0][0]][:2], all_data0[0][:2]) < 0.5:
+            overlap_od0[0][0] = 0
+        if process_log.distance(all_data1[overlap_od1[0][0]][:2], all_data1[0][:2]) < 0.5:
+            overlap_od1[0][0] = 0
         if overlap_od0[0][0] == 0 and overlap_od1[0][0] == 0:
             # the first seg is the overlap seg
             overlap0 = all_data0[overlap_od0[d][0]:overlap_od0[d][1]]
@@ -153,15 +171,15 @@ for d in range(len(overlap_od0)):
                                                             autovel, weight, is_local, id4node, id4seg)
         else:
             if overlap_od0[0][0] != 0:
-                vector0 = [all_data0[overlap_od0[d][0] - 1][0] - all_data0[overlap_od0[d][0] - 2][0],
-                           all_data0[overlap_od0[d][0] - 1][1] - all_data0[overlap_od0[d][0] - 2][1]]
+                vector0 = [all_data0[overlap_od0[d][0]][0] - all_data0[overlap_od0[d][0] - 1][0],
+                           all_data0[overlap_od0[d][0]][1] - all_data0[overlap_od0[d][0] - 1][1]]
             if overlap_od1[0][0] != 0:
-                vector1 = [all_data1[overlap_od1[d][0] - 1][0] - all_data1[overlap_od1[d][0] - 2][0],
-                           all_data1[overlap_od1[d][0] - 1][1] - all_data1[overlap_od1[d][0] - 2][1]]
+                vector1 = [all_data1[overlap_od1[d][0] + 1][0] - all_data1[overlap_od1[d][0]][0],
+                           all_data1[overlap_od1[d][0] + 1][1] - all_data1[overlap_od1[d][0]][1]]
             # find the real start of overlap
             ov_st = overlap_od0[d][0]
-            vector4connect = [all_data0[ov_st][0] - all_data0[ov_st - 1][0],
-                              all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
+            vector4connect = [all_data0[ov_st + 1][0] - all_data0[ov_st][0],
+                              all_data0[ov_st + 1][1] - all_data0[ov_st][1]]
             if overlap_od0[0][0] != 0:
                 cos0 = cosine_similarity([vector0], [vector4connect])
                 id0 = 0
@@ -176,35 +194,34 @@ for d in range(len(overlap_od0)):
             if overlap_od1[0][0] != 0:
                 id1 = 0
                 cos1 = cosine_similarity([vector1], [vector4connect])
+                _, ov_st1 = process_log.find_neighbor(all_data1, np.array(
+                    [all_data0[ov_st][0], all_data0[ov_st][1]]).reshape(1, 2))
+                ov_st1 = ov_st1[0]
+                min_dis = process_log.distance(all_data0[ov_st][:2], all_data1[ov_st1 + 1][:2])
                 while cos1[0] < math.cos(10 * math.pi / 180):
+                    if id1 > 50 or min_dis < 0.1:
+                        break
                     ov_st += 1
                     id1 += 1
                     cos1_cp = cos1
                     vector4connect = [all_data0[ov_st][0] - all_data0[ov_st - 1][0],
                                       all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
                     cos1 = cosine_similarity([vector1], [vector4connect])
-                    if id1 > 50:
-                        break
+                    _, ov_st1 = process_log.find_neighbor(all_data1, np.array(
+                        [all_data0[ov_st][0], all_data0[ov_st][1]]).reshape(1, 2))
+                    ov_st1 = ov_st1[0]
+                    min_dis = process_log.distance(all_data0[ov_st][:2], all_data1[ov_st1 + 1][:2])
             # find another start of overlap in another trajectory
-            ov_st1 = process_log.find_neighbor(all_data1, np.array([all_data0[ov_st][0], all_data0[ov_st][1]]).reshape(1, 2))
-            ov_st1 = ov_st1[0]
-            last1 = ov_st1
-            last0 = ov_st
-            while process_log.distance(all_data1[last1][:2], all_data1[ov_st1][:2]) < 0.5:
-                last1 -= 1
-            if ov_st1 < overlap_od1[d][0]:
-                ov_st1 = overlap_od1[d][0]
-            while process_log.distance(all_data0[last0][:2], all_data0[ov_st][:2]) < 0.5:
-                last0 -= 1
+            # ov_st1 = ov_st1[0]
             if overlap_od0[0][0] != 0:
-                first_data0 = all_data0[:last0]
+                first_data0 = all_data0[:ov_st]
                 hmap, id4node, id4seg = process_log.single_dump(first_data0, hmap, width, max_vel_str, max_vel_cur, gps,
                                                                 autovel,
                                                                 weight, is_local, id4node, id4seg)
                 id4connect0 = id4node - 1
 
             if overlap_od1[0][0] != 0:
-                first_data1 = all_data1[:last1]
+                first_data1 = all_data1[:ov_st1]
                 hmap, id4node, id4seg = process_log.single_dump(first_data1, hmap, width, max_vel_str, max_vel_cur, gps,
                                                                 autovel,
                                                                 weight, is_local, id4node, id4seg)
@@ -226,13 +243,43 @@ for d in range(len(overlap_od0)):
                      "seg_id": id4seg}], "name": "seg" + str(id4seg)}
                 id4seg += 1
                 hmap["segment_set"].append(first_connect_seg1)
+            # find the real overlap end
+            ov_ed = overlap_od0[d][1]
+            _, ov_ed1 = process_log.find_neighbor(all_data1, np.array(
+                [all_data0[ov_ed][0], all_data0[ov_ed][1]]).reshape(1, 2))
+            ov_ed1 = ov_ed1[0]
+            vector4ed = [all_data0[ov_ed][0] - all_data0[ov_ed - 1][0],
+                         all_data0[ov_ed][1] - all_data0[ov_ed - 1][1]]
+            vector1_ed = [all_data1[ov_ed1 + 1][0] - all_data0[ov_ed][0],
+                          all_data1[ov_ed1 + 1][1] - all_data0[ov_ed][1]]
+            id4ed = 0
+            cos4ed = cosine_similarity([vector4ed], [vector1_ed])
 
-            overlap0 = all_data0[ov_st:overlap_od0[d][1]]
+            min_dis = process_log.distance(all_data0[ov_ed][:2], all_data1[ov_ed1 + 1][:2])
+            while cos4ed[0] < math.cos(10 * math.pi / 180):
+                if id4ed > 50 or min_dis < 0.1:
+                    break
+                ov_ed -= 1
+                id4ed += 1
+                cos4ed_cp = cos4ed
+                vector4ed = [all_data0[ov_ed][0] - all_data0[ov_ed - 1][0],
+                             all_data0[ov_ed][1] - all_data0[ov_ed - 1][1]]
+                cos4ed = cosine_similarity([vector4ed], [vector1_ed])
+                _, ov_ed1 = process_log.find_neighbor(all_data1, np.array(
+                    [all_data0[ov_ed][0], all_data0[ov_ed][1]]).reshape(1, 2))
+                ov_ed1 = ov_ed1[0]
+                min_dis = process_log.distance(all_data0[ov_ed][:2], all_data1[ov_ed1 + 1][:2])
+
+            overlap0 = all_data0[ov_st:ov_ed]
             hmap, id4node, id4seg = process_log.single_dump(overlap0, hmap, width, max_vel_str, max_vel_cur, gps,
                                                             autovel, weight, is_local, id4node, id4seg)
-    elif d == len(overlap_od0) - 1:
+    if d == len(overlap_od0) - 1:
         id4final = id4node - 1
-        if overlap_od0[-1][1] != len(all_data0) - 1:
+        if process_log.distance(all_data0[ov_ed][:2], all_data0[-1][:2]) < 0.5:
+            ov_ed = -1
+        if process_log.distance(all_data1[ov_ed1][:2], all_data1[-1][:2]) < 0.5:
+            ov_ed1 = -1
+        if ov_ed != len(all_data0) - 1:
             final_connect_seg0 = {"id": id4seg, "lane_list": [
                 {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": max_vel_str,
                  "name": "Path" + str(id4seg),
@@ -240,10 +287,10 @@ for d in range(len(overlap_od0)):
                  "seg_id": id4seg}], "name": "seg" + str(id4seg)}
             id4seg += 1
             hmap["segment_set"].append(final_connect_seg0)
-            final_data0 = all_data0[overlap_od0[d][1]:]
+            final_data0 = all_data0[ov_ed:]
             hmap, id4node, id4seg = process_log.single_dump(final_data0, hmap, width, max_vel_str, max_vel_cur, gps,
                                                             autovel, weight, is_local, id4node, id4seg)
-        if overlap_od1[-1][1] != len(all_data1) - 1:
+        if ov_ed1 != len(all_data1) - 1:
             final_connect_seg1 = {"id": id4seg, "lane_list": [
                 {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": max_vel_str,
                  "name": "Path" + str(id4seg),
@@ -251,10 +298,10 @@ for d in range(len(overlap_od0)):
                  "seg_id": id4seg}], "name": "seg" + str(id4seg)}
             id4seg += 1
             hmap["segment_set"].append(final_connect_seg1)
-            final_data1 = all_data1[overlap_od1[d][1]:]
+            final_data1 = all_data1[ov_ed1:]
             hmap, id4node, id4seg = process_log.single_dump(final_data1, hmap, width, max_vel_str, max_vel_cur, gps,
                                                             autovel, weight, is_local, id4node, id4seg)
-    else:
+    if d != 0 and d != len(overlap_od0) - 1:
         id4connect_f = id4node - 1
         data0 = all_data0[overlap_od0[d - 1][1]:overlap_od0[d][0]]
         front_connect_seg0 = {"id": id4seg, "lane_list": [
@@ -309,5 +356,5 @@ class MyEncoder(json.JSONEncoder):
             return super(MyEncoder, self).default(obj)
 
 
-with open("0605" + '.hmap', 'w') as f1:
+with open(datetime.datetime.now().strftime('%H-%M-%S') + '.hmap', 'w') as f1:
     json.dump(hmap, f1, indent=4, cls=MyEncoder)

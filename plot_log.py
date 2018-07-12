@@ -11,10 +11,10 @@ import datetime
 
 gps = 0
 vslam = 0
-all_data0 = process_pcmap("1.pcmap", vslam, gps)
+all_data0 = process_pcmap("3.pcmap", vslam, gps)
 all_x0 = all_data0[:, 0]
 all_y0 = all_data0[:, 1]
-all_data1 = process_pcmap("2.pcmap", vslam, gps)
+all_data1 = process_pcmap("4.pcmap", vslam, gps)
 all_x1 = all_data1[:, 0]
 all_y1 = all_data1[:, 1]
 width = (max(max(all_x0), max(all_x1)) - min(min(all_x0), min(all_x1))) / 10
@@ -110,7 +110,9 @@ for j in range(min(all_label), max(all_label) + 1):
     st1_cp = min(loc1)
     ed0_cp = max(loc0)
     ed1_cp = max(loc1)
-    if (loc0[0] - loc0[-1]) * (loc1[0] - loc1[-1]) < 0:
+    v0 = [all_data0[max(loc0)][0] - all_data0[min(loc0)][0], all_data0[max(loc0)][1] - all_data0[min(loc0)][1]]
+    v1 = [all_data1[max(loc1)][0] - all_data1[min(loc1)][0], all_data1[max(loc1)][1] - all_data1[min(loc1)][1]]
+    if (loc0[0] - loc0[-1]) * (loc1[0] - loc1[-1]) < 0 or cosine_similarity([v0], [v1])[0][0] < math.cos(10*math.pi/180):
         continue
     elif min(loc0) > st0_cp + 5 and min(loc1) > st1_cp + 5:
         overlap_od0.append([min(loc0), max(loc0)])

@@ -187,8 +187,8 @@ def extract_point(all_utm_time):
 def find_neighbor(all_point, overlap):
     all_pure_xy = all_point[:, :2]
     tree = cKDTree(all_pure_xy)
-    _, loc = tree.query(overlap[:, :2], k=1)
-    return loc
+    dis, loc = tree.query(overlap[:, :2], k=1)
+    return dis, loc
 
 
 def cluster4overlap(all_point, overlap_loc):
@@ -399,11 +399,11 @@ def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autove
         jw = all_point_final[:, -2:].tolist()
     # step4 Concat straight line
     # num = 0
+    all_point_final = all_point_final.tolist()
     while True:
         slope = calculate_slope(all_point_final)
         after_concat = concat_stright(slope, all_point_final)
-        after_concat = list(after_concat)
-        all_point_final = list(all_point_final)
+        #after_concat = list(after_concat)
         if after_concat == all_point_final or abs(len(after_concat) - len(all_point_final)) == 1:
             break
         else:

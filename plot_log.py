@@ -149,9 +149,9 @@ id4connect1 = 0
 
 # No overlap, then simple merge
 ano_hmap = {"debug_info": {"lat_bias": 0, "lng_bias": 0}, "is_coordinate_gps": is_coordinate_gps,
-        "lane_switch_set": [],
-        "node_set": [], "segment_set": []}
-if not overlap_od0  or not overlap_od1:
+            "lane_switch_set": [],
+            "node_set": [], "segment_set": []}
+if not overlap_od0 or not overlap_od1:
     hmap, _, _ = process_log.single_dump(all_data0, hmap, width, max_vel_str, max_vel_cur, gps,
                                          autovel, weight, is_local, 0, 0)
     ano_hmap, _, _ = process_log.single_dump(all_data1, ano_hmap, width, max_vel_str, max_vel_cur, gps,

@@ -8,7 +8,10 @@ import math
 import os
 from rdp import rdp
 from scipy.spatial.distance import squareform, pdist
-import copy
+from sklearn.metrics.pairwise import cosine_similarity
+import cv2 as cv
+from scipy.linalg import solve
+import matplotlib.pyplot as plt
 
 
 def delete_near_point(all_point, min_dis):
@@ -41,9 +44,6 @@ def concat_stright(slope, all_point):
         origin_of_class = all_point[2 * k]
         middle_of_class = all_point[2 * k + 1]
         destination_of_class = all_point[2 * k + 2]
-        vector1 = [1, slope[2 * k]]
-        vector2 = [1, slope[2 * k + 1]]
-        # simi_cos = np.dot(vector1, vector2) / (np.linalg.norm(vector1) * np.linalg.norm(vector2))
         simi_cos = (1 + slope[2 * k] * slope[2 * k + 1]) / math.sqrt(1 + slope[2 * k] ** 2) / math.sqrt(
             1 + slope[2 * k + 1] ** 2)
         if simi_cos > math.cos(10 * math.pi / 180):
@@ -277,303 +277,306 @@ def distance(a, b):
 
 
 def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autovel, weight, is_local, id4node, id4seg):
-    speed = 5
-    offset4seg = id4node
-    all_utm_time[:, -1] = np.array(range(len(all_utm_time)))
-    all_utm_time_walk = all_utm_time
-    all_utm_time_walk[:, -1] = all_utm_time_walk[:, -1] * speed
-    # step0-1 calculate the vel of every point
-    # With or Without vel
-    if autovel == 0:
-        new_all_utm_vel = all_utm_time
+    if len(all_utm_time) <=1:
+        pass
     else:
-        all_point_for_vel = all_utm_time.T
-        dif = np.diff(all_point_for_vel)
-        all_vel = []
-        for s in range(0, len(dif[0])):
-            if dif[3][s] < 0.001:
-                vel_of_point = 3
-            else:
-                vel_of_point = 3.6 * math.sqrt(
-                    math.pow(dif[0][s], 2) + math.pow(dif[1][s], 2) + math.pow(dif[2][s], 2)) / dif[3][s]
-            if vel_of_point < 3:
-                vel_of_point = 3
-            if vel_of_point > 40:
-                vel_of_point = 40
-            all_vel.append(vel_of_point)
-
-        all_vel = list(filter(None, all_vel))
-        all_vel = np.array(all_vel)
-        N = 20
-        weights = np.ones(N) / N
-        s = np.convolve(weights, all_vel)[N - 1:-N + 1]
-
-        all_utm_vel = list(all_utm_time)
-        new_all_utm_vel = []
-        for d in range(len(all_utm_vel)):
-            new_d = list(all_utm_vel[d])
-            if d >= len(s) - 1:
-                new_d.append(np.max(s))
-            elif d == 0:
-                new_d.append(np.max(s))
-            else:
-                new_d.append(s[d])
-            new_all_utm_vel.append(new_d)
-
-        new_all_utm_vel = np.array(new_all_utm_vel)
-
-    all_pure_utm = all_utm_time[:, :3]
-    # step1 extract key point
-    # step1-0 few points can be processed directly
-    if len(new_all_utm_vel) <= 100:
-        mask = rdp(all_pure_utm, epsilon=0.02, algo="iter", return_mask=True)
-        all_point_final = new_all_utm_vel[mask]
-    else:
-        # step1-1 cluster by distance and time
-        point_num = 100
-        n_clusters = len(all_utm_time) // point_num
-        kmeans = MiniBatchKMeans(n_clusters, init_size=n_clusters, random_state=1).fit(all_utm_time_walk)
-        labels = kmeans.labels_
-
-        # step2 sort all points by time order
-        all_point = []
-        for i in range(n_clusters):
-            class_index = labels
-            same_class_index = np.where(class_index == i)
-            # all_utm_time_walk is for cluster and the useful one is new_all_utm_vel
-            same_class_utm = all_pure_utm[list(same_class_index[0])]
-            same_class = new_all_utm_vel[list(same_class_index[0])]
-            mask4class = rdp(same_class_utm, epsilon=0.02, algo="iter", return_mask=True)
-            keypoint4class = same_class[mask4class]
-            if all_point == []:
-                all_point = keypoint4class
-            else:
-                all_point = np.vstack((all_point, keypoint4class))
-        arg = np.argsort(all_point[:, 3])
-        all_point_final = all_point[list(arg)]
-        # all_point_final = all_point
-
-    # step3 delete the latter point in every short segment that length is less than 0.5m
-    all_point_final = delete_near_point(all_point_final, 0.5)
-    all_point_final = np.array(all_point_final)
-    all_point_final = delete_near_point(all_point_final, 0.5)
-    all_point_final = np.array(all_point_final)
-    # Local cooridinate or GPS With or Without vel(2*2)
-    vel_for_point = []
-    lati = []
-    longi = []
-    height = []
-    all_x = []
-    all_y = []
-    jw = []
-    if gps == 0 and autovel == 0:
-        for i in all_point_final:
-            longi.append(i[0])
-            lati.append(i[1])
-            height.append(i[2])
-            all_x.append(i[0])
-            all_y.append(i[1])
-            jw.append([i[0], i[1]])
-    elif gps == 0 and autovel == 1:
-        for i in all_point_final:
-            longi.append(i[0])
-            lati.append(i[1])
-            height.append(i[2])
-            all_x.append(i[0])
-            all_y.append(i[1])
-            jw.append([i[0], i[1]])
-        vel_for_point = all_point_final[:, -1]
-    elif gps == 1 and autovel == 0:
-        lati = list(all_point_final[:, -2])
-        longi = list(all_point_final[:, -3])
-        all_x = all_point_final[:, 0].tolist()
-        all_y = all_point_final[:, 1].tolist()
-        height = list(all_point_final[:, 2])
-        jw = all_point_final[:, -2:].tolist()
-    elif gps == 1 and autovel == 1:
-        lati = list(all_point_final[:, -2])
-        longi = list(all_point_final[:, -3])
-        all_x = all_point_final[:, 0].tolist()
-        all_y = all_point_final[:, 1].tolist()
-        height = list(all_point_final[:, 2])
-        vel_for_point = all_point_final[:, -1]
-        jw = all_point_final[:, -2:].tolist()
-    # step4 Concat straight line
-    # num = 0
-    all_point_final = all_point_final.tolist()
-    while True:
-        slope = calculate_slope(all_point_final)
-        after_concat = concat_stright(slope, all_point_final)
-        # after_concat = list(after_concat)
-        if after_concat == all_point_final or abs(len(after_concat) - len(all_point_final)) == 1:
-            break
+        speed = 5
+        offset4seg = id4node
+        all_utm_time[:, -1] = np.array(range(len(all_utm_time)))
+        all_utm_time_walk = all_utm_time
+        all_utm_time_walk[:, -1] = all_utm_time_walk[:, -1] * speed
+        # step0-1 calculate the vel of every point
+        # With or Without vel
+        if autovel == 0:
+            new_all_utm_vel = all_utm_time
         else:
-            all_point_final = after_concat
-        # num += 1
-    # Local Coordinate or GPS
-    X = []
-    Y = []
-    key_jw = []
-    if gps == 0 or is_local == 1:
-        for i in all_point_final:
-            X.append(i[0])
-            Y.append(i[1])
-            key_jw.append([i[0], i[1]])
-    else:
-        final_point = np.array(all_point_final)
-        key_jw = final_point[:, -2:].tolist()
-        X = list(final_point[:, 0])
-        Y = list(final_point[:, 1])
+            all_point_for_vel = all_utm_time.T
+            dif = np.diff(all_point_for_vel)
+            all_vel = []
+            for s in range(0, len(dif[0])):
+                if dif[3][s] < 0.001:
+                    vel_of_point = 3
+                else:
+                    vel_of_point = 3.6 * math.sqrt(
+                        math.pow(dif[0][s], 2) + math.pow(dif[1][s], 2) + math.pow(dif[2][s], 2)) / dif[3][s]
+                if vel_of_point < 3:
+                    vel_of_point = 3
+                if vel_of_point > 40:
+                    vel_of_point = 40
+                all_vel.append(vel_of_point)
 
-    # step5 Judge the back off
-    possible_backid = []
-    possible_backvec = []
-    for p in range(len(jw) - 2):
-        vector1 = [all_x[p + 1] - all_x[p], all_y[p + 1] - all_y[p]]
-        vector2 = [all_x[p + 2] - all_x[p + 1], all_y[p + 2] - all_y[p + 1]]
-        back_cos = vector_cos(vector1, vector2)
-        if back_cos < 0:
-            possible_backid.append(p + 1)
-            possible_backvec.append([vector1, vector2])
-    # Check the back off id
-    all_possible_backid = possible_backid[:]
-    possible_backid = []
-    for b in range(len(all_possible_backid) - 1):
-        if vector_cos(possible_backvec[b][1], possible_backvec[b + 1][0]) > 0:
-            possible_backid.append(all_possible_backid[b])
-            possible_backid.append(all_possible_backid[b + 1])
+            all_vel = list(filter(None, all_vel))
+            all_vel = np.array(all_vel)
+            N = 20
+            weights = np.ones(N) / N
+            s = np.convolve(weights, all_vel)[N - 1:-N + 1]
+
+            all_utm_vel = list(all_utm_time)
+            new_all_utm_vel = []
+            for d in range(len(all_utm_vel)):
+                new_d = list(all_utm_vel[d])
+                if d >= len(s) - 1:
+                    new_d.append(np.max(s))
+                elif d == 0:
+                    new_d.append(np.max(s))
+                else:
+                    new_d.append(s[d])
+                new_all_utm_vel.append(new_d)
+
+            new_all_utm_vel = np.array(new_all_utm_vel)
+
+        all_pure_utm = all_utm_time[:, :3]
+        # step1 extract key point
+        # step1-0 few points can be processed directly
+        if len(new_all_utm_vel) <= 100:
+            mask = rdp(all_pure_utm, epsilon=0.02, algo="iter", return_mask=True)
+            all_point_final = new_all_utm_vel[mask]
         else:
-            pass
+            # step1-1 cluster by distance and time
+            point_num = 100
+            n_clusters = len(all_utm_time) // point_num
+            kmeans = MiniBatchKMeans(n_clusters, init_size=n_clusters, random_state=1).fit(all_utm_time_walk)
+            labels = kmeans.labels_
 
-    # step7-1 node_set
-    # With or Without vel
-    if autovel == 0:
-        for i in range(len(lati)):
-            node_lat = lati[i]
-            node_lng = longi[i]
-            node_hei = height[i]
-            node = {"gps_weight": weight[0], "id": i + id4node, "lat": node_lat, "lng": node_lng,
-                    "lslam_carto_weight": weight[3],
-                    "name": str(i + id4node),
-                    "qrcode_weight": weight[1], "radius": 0, "type": 17, "vslam_weight": weight[2],
-                    "z": node_hei}
-            hmap["node_set"].append(node)
-        id4node += len(lati)
-    else:
-        for i in range(len(lati)):
-            node_lat = lati[i]
-            node_lng = longi[i]
-            node_hei = height[i]
-            node_vel = vel_for_point[i]
-            node = {"gps_weight": weight[0], "id": i + id4node, "lat": node_lat, "lng": node_lng, "max_vel": node_vel,
-                    "lslam_carto_weight": weight[3], "name": str(i + id4node),
-                    "qrcode_weight": weight[1], "radius": 0, "type": 17, "vslam_weight": weight[2],
-                    "z": node_hei}
-            hmap["node_set"].append(node)
-        id4node += len(lati)
-    # step7-2 segment_set
-    # Count the number of points between key points
-    all_point_num = []
-    for j in range(0, len(key_jw) - 1):
-        point0 = key_jw[j]
-        point1 = key_jw[j + 1]
-        index0 = jw.index(point0)
-        index1 = jw.index(point1)
-        point_num = index1 - index0
-        all_point_num.append(point_num)
-    # Find the stright line which number of points is lager than 2 and distance is larger than 10m
-    all_str_id = [k for k in range(len(all_point_num)) if all_point_num[k] > 1]
-    real_str_id = []
-    for h in range(len(all_str_id)):
-        key_id0 = all_str_id[h]
-        key_id1 = all_str_id[h] + 1
-        if key_id1 > len(jw) - 1:
-            break
+            # step2 sort all points by time order
+            all_point = []
+            for i in range(n_clusters):
+                class_index = labels
+                same_class_index = np.where(class_index == i)
+                # all_utm_time_walk is for cluster and the useful one is new_all_utm_vel
+                same_class_utm = all_pure_utm[list(same_class_index[0])]
+                same_class = new_all_utm_vel[list(same_class_index[0])]
+                mask4class = rdp(same_class_utm, epsilon=0.02, algo="iter", return_mask=True)
+                keypoint4class = same_class[mask4class]
+                if all_point == []:
+                    all_point = keypoint4class
+                else:
+                    all_point = np.vstack((all_point, keypoint4class))
+            arg = np.argsort(all_point[:, 3])
+            all_point_final = all_point[list(arg)]
+            # all_point_final = all_point
+
+        # step3 delete the latter point in every short segment that length is less than 0.5m
+        all_point_final = delete_near_point(all_point_final, 0.5)
+        all_point_final = np.array(all_point_final)
+        all_point_final = delete_near_point(all_point_final, 0.5)
+        all_point_final = np.array(all_point_final)
+        # Local cooridinate or GPS With or Without vel(2*2)
+        vel_for_point = []
+        lati = []
+        longi = []
+        height = []
+        all_x = []
+        all_y = []
+        jw = []
+        if gps == 0 and autovel == 0:
+            for i in all_point_final:
+                longi.append(i[0])
+                lati.append(i[1])
+                height.append(i[2])
+                all_x.append(i[0])
+                all_y.append(i[1])
+                jw.append([i[0], i[1]])
+        elif gps == 0 and autovel == 1:
+            for i in all_point_final:
+                longi.append(i[0])
+                lati.append(i[1])
+                height.append(i[2])
+                all_x.append(i[0])
+                all_y.append(i[1])
+                jw.append([i[0], i[1]])
+            vel_for_point = all_point_final[:, -1]
+        elif gps == 1 and autovel == 0:
+            lati = list(all_point_final[:, -2])
+            longi = list(all_point_final[:, -3])
+            all_x = all_point_final[:, 0].tolist()
+            all_y = all_point_final[:, 1].tolist()
+            height = list(all_point_final[:, 2])
+            jw = all_point_final[:, -2:].tolist()
+        elif gps == 1 and autovel == 1:
+            lati = list(all_point_final[:, -2])
+            longi = list(all_point_final[:, -3])
+            all_x = all_point_final[:, 0].tolist()
+            all_y = all_point_final[:, 1].tolist()
+            height = list(all_point_final[:, 2])
+            vel_for_point = all_point_final[:, -1]
+            jw = all_point_final[:, -2:].tolist()
+        # step4 Concat straight line
+        # num = 0
+        all_point_final = all_point_final.tolist()
+        while True:
+            slope = calculate_slope(all_point_final)
+            after_concat = concat_stright(slope, all_point_final)
+            # after_concat = list(after_concat)
+            if after_concat == all_point_final or abs(len(after_concat) - len(all_point_final)) == 1:
+                break
+            else:
+                all_point_final = after_concat
+            # num += 1
+        # Local Coordinate or GPS
+        X = []
+        Y = []
+        key_jw = []
+        if gps == 0 or is_local == 1:
+            for i in all_point_final:
+                X.append(i[0])
+                Y.append(i[1])
+                key_jw.append([i[0], i[1]])
         else:
-            str_dis = distance([X[key_id0], Y[key_id0]], [X[key_id1], Y[key_id1]])
-            if str_dis >= 5:
-                real_str_id.append(all_str_id[h])
+            final_point = np.array(all_point_final)
+            key_jw = final_point[:, -2:].tolist()
+            X = list(final_point[:, 0])
+            Y = list(final_point[:, 1])
 
-    all_segment_id = []
-    # With or Without vel
-    if autovel == 0:
-        vel_str = max_vel_str
-        vel_cur = max_vel_cur
-    else:
-        vel_str = 40
-        vel_cur = 40
-    # Judge whether this a pure curve
-    if len(real_str_id) == 0:
-        all_segment_id.append(key_jw[0])
-        all_segment_id.append(key_jw[-1])
-        only_cur_segment = {"id": id4seg, "lane_list": [
-            {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur,
-             "name": "Path" + str(id4seg),
-             "node_list": list(range(0 + offset4seg, len(jw) + offset4seg)), "right_line_type": 1, "seg_id": id4seg}],
-                            "name": "seg" + str(id4seg)}
-        id4seg += 1
-        hmap["segment_set"].append(only_cur_segment)
-    else:
-        # Distinguish the stright and curve
-        for p in range(len(real_str_id) - 1):
-            first_id = jw.index(key_jw[real_str_id[p]])
-            second_id = jw.index(key_jw[real_str_id[p] + 1])
-            third_id = jw.index(key_jw[real_str_id[p + 1]])
-            all_segment_id.append(first_id)
-            if second_id == third_id:
+        # step5 Judge the back off
+        possible_backid = []
+        possible_backvec = []
+        for p in range(len(jw) - 2):
+            vector1 = [all_x[p + 1] - all_x[p], all_y[p + 1] - all_y[p]]
+            vector2 = [all_x[p + 2] - all_x[p + 1], all_y[p + 2] - all_y[p + 1]]
+            back_cos = vector_cos(vector1, vector2)
+            if back_cos < 0:
+                possible_backid.append(p + 1)
+                possible_backvec.append([vector1, vector2])
+        # Check the back off id
+        all_possible_backid = possible_backid[:]
+        possible_backid = []
+        for b in range(len(all_possible_backid) - 1):
+            if vector_cos(possible_backvec[b][1], possible_backvec[b + 1][0]) > 0:
+                possible_backid.append(all_possible_backid[b])
+                possible_backid.append(all_possible_backid[b + 1])
+            else:
                 pass
+
+        # step7-1 node_set
+        # With or Without vel
+        if autovel == 0:
+            for i in range(len(lati)):
+                node_lat = lati[i]
+                node_lng = longi[i]
+                node_hei = height[i]
+                node = {"gps_weight": weight[0], "id": i + id4node, "lat": node_lat, "lng": node_lng,
+                        "lslam_carto_weight": weight[3],
+                        "name": str(i + id4node),
+                        "qrcode_weight": weight[1], "radius": 0, "type": 17, "vslam_weight": weight[2],
+                        "z": node_hei}
+                hmap["node_set"].append(node)
+            id4node += len(lati)
+        else:
+            for i in range(len(lati)):
+                node_lat = lati[i]
+                node_lng = longi[i]
+                node_hei = height[i]
+                node_vel = vel_for_point[i]
+                node = {"gps_weight": weight[0], "id": i + id4node, "lat": node_lat, "lng": node_lng, "max_vel": node_vel,
+                        "lslam_carto_weight": weight[3], "name": str(i + id4node),
+                        "qrcode_weight": weight[1], "radius": 0, "type": 17, "vslam_weight": weight[2],
+                        "z": node_hei}
+                hmap["node_set"].append(node)
+            id4node += len(lati)
+        # step7-2 segment_set
+        # Count the number of points between key points
+        all_point_num = []
+        for j in range(0, len(key_jw) - 1):
+            point0 = key_jw[j]
+            point1 = key_jw[j + 1]
+            index0 = jw.index(point0)
+            index1 = jw.index(point1)
+            point_num = index1 - index0
+            all_point_num.append(point_num)
+        # Find the stright line which number of points is lager than 2 and distance is larger than 10m
+        all_str_id = [k for k in range(len(all_point_num)) if all_point_num[k] > 1]
+        real_str_id = []
+        for h in range(len(all_str_id)):
+            key_id0 = all_str_id[h]
+            key_id1 = all_str_id[h] + 1
+            if key_id1 > len(jw) - 1:
+                break
             else:
-                all_segment_id.append(second_id)
-            # Generate the stright segment
-            str_segment = {"id": id4seg, "lane_list": [
-                {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_str, "name": "Path" + str(id4seg),
-                 "node_list": list(range(first_id + offset4seg, second_id + 1 + offset4seg)), "right_line_type": 1,
-                 "seg_id": id4seg}],
-                           "name": "seg" + str(id4seg)}
+                str_dis = distance([X[key_id0], Y[key_id0]], [X[key_id1], Y[key_id1]])
+                if str_dis >= 5:
+                    real_str_id.append(all_str_id[h])
+
+        all_segment_id = []
+        # With or Without vel
+        if autovel == 0:
+            vel_str = max_vel_str
+            vel_cur = max_vel_cur
+        else:
+            vel_str = 40
+            vel_cur = 40
+        # Judge whether this a pure curve
+        if len(real_str_id) == 0:
+            all_segment_id.append(key_jw[0])
+            all_segment_id.append(key_jw[-1])
+            only_cur_segment = {"id": id4seg, "lane_list": [
+                {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur,
+                 "name": "Path" + str(id4seg),
+                 "node_list": list(range(0 + offset4seg, len(jw) + offset4seg)), "right_line_type": 1, "seg_id": id4seg}],
+                                "name": "seg" + str(id4seg)}
             id4seg += 1
-            hmap["segment_set"].append(str_segment)
-            # Generate the curve segment if second id is not the same as third id
-            if second_id == third_id:
-                pass
-            else:
-                cur_segment = {"id": id4seg, "lane_list": [
-                    {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur,
-                     "name": "Path" + str(id4seg),
-                     "node_list": list(range(second_id + offset4seg, third_id + 1 + offset4seg)), "right_line_type": 1,
+            hmap["segment_set"].append(only_cur_segment)
+        else:
+            # Distinguish the stright and curve
+            for p in range(len(real_str_id) - 1):
+                first_id = jw.index(key_jw[real_str_id[p]])
+                second_id = jw.index(key_jw[real_str_id[p] + 1])
+                third_id = jw.index(key_jw[real_str_id[p + 1]])
+                all_segment_id.append(first_id)
+                if second_id == third_id:
+                    pass
+                else:
+                    all_segment_id.append(second_id)
+                # Generate the stright segment
+                str_segment = {"id": id4seg, "lane_list": [
+                    {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_str, "name": "Path" + str(id4seg),
+                     "node_list": list(range(first_id + offset4seg, second_id + 1 + offset4seg)), "right_line_type": 1,
                      "seg_id": id4seg}],
                                "name": "seg" + str(id4seg)}
                 id4seg += 1
-                hmap["segment_set"].append(cur_segment)
+                hmap["segment_set"].append(str_segment)
+                # Generate the curve segment if second id is not the same as third id
+                if second_id == third_id:
+                    pass
+                else:
+                    cur_segment = {"id": id4seg, "lane_list": [
+                        {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur,
+                         "name": "Path" + str(id4seg),
+                         "node_list": list(range(second_id + offset4seg, third_id + 1 + offset4seg)), "right_line_type": 1,
+                         "seg_id": id4seg}],
+                                   "name": "seg" + str(id4seg)}
+                    id4seg += 1
+                    hmap["segment_set"].append(cur_segment)
 
-        # Append the first segment
-        f_id = jw.index(key_jw[real_str_id[0]])
-        if f_id == 0:
-            pass
-        else:
-            # Generate the first curve segment
-            first_cur_segment = {"id": id4seg, "lane_list": [
-                {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur, "name": "Path" + str(id4seg),
-                 "node_list": list(range(0 + offset4seg, f_id + 1 + offset4seg)), "right_line_type": 1,
-                 "seg_id": id4seg}],
-                                 "name": "seg" + str(id4seg)}
-            id4seg += 1
-            hmap["segment_set"].insert(0, first_cur_segment)
-            all_segment_id.insert(0, 0)
-        # Append the last segment
-        last_id = jw.index(key_jw[real_str_id[- 1]])
-        all_segment_id.append(last_id)
-        if last_id == len(jw) - 1:
-            pass
-        else:
-            # Generate the last curve segment
-            last_cur_segment = {"id": id4seg, "lane_list": [
-                {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur, "name": "Path" + str(id4seg),
-                 "node_list": list(range(last_id + offset4seg, len(jw) + offset4seg)), "right_line_type": 1,
-                 "seg_id": id4seg}],
-                                "name": "seg" + str(id4seg)}
-            id4seg += 1
-            hmap["segment_set"].append(last_cur_segment)
-            all_segment_id.append(len(jw) - 1)
+            # Append the first segment
+            f_id = jw.index(key_jw[real_str_id[0]])
+            if f_id == 0:
+                pass
+            else:
+                # Generate the first curve segment
+                first_cur_segment = {"id": id4seg, "lane_list": [
+                    {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur, "name": "Path" + str(id4seg),
+                     "node_list": list(range(0 + offset4seg, f_id + 1 + offset4seg)), "right_line_type": 1,
+                     "seg_id": id4seg}],
+                                     "name": "seg" + str(id4seg)}
+                id4seg += 1
+                hmap["segment_set"].insert(0, first_cur_segment)
+                all_segment_id.insert(0, 0)
+            # Append the last segment
+            last_id = jw.index(key_jw[real_str_id[- 1]])
+            all_segment_id.append(last_id)
+            if last_id == len(jw) - 1:
+                pass
+            else:
+                # Generate the last curve segment
+                last_cur_segment = {"id": id4seg, "lane_list": [
+                    {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur, "name": "Path" + str(id4seg),
+                     "node_list": list(range(last_id + offset4seg, len(jw) + offset4seg)), "right_line_type": 1,
+                     "seg_id": id4seg}],
+                                    "name": "seg" + str(id4seg)}
+                id4seg += 1
+                hmap["segment_set"].append(last_cur_segment)
+                all_segment_id.append(len(jw) - 1)
 
     return hmap, id4node, id4seg
 
@@ -655,3 +658,188 @@ def simple_merge(main_hmap, aux_hmap):
 
         merge_hmap['object_set'].append(obj_set_in_aux)
     return merge_hmap
+
+
+def find_st_in_overlap(ori_st_ed, all_data0, all_data1):
+    ov_st = ori_st_ed
+    _, ov_st1 = find_neighbor(all_data1, np.array(
+        [all_data0[ov_st][0], all_data0[ov_st][1]]).reshape(1, 2))
+    vector0 = [all_data0[ov_st][0] - all_data0[ov_st - 1][0],
+               all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
+    vector1 = [all_data0[ov_st][0] - all_data1[ov_st1 - 1][0],
+               all_data0[ov_st][1] - all_data1[ov_st1 - 1][1]]
+    vector4connect = [all_data0[ov_st + 1][0] - all_data0[ov_st][0],
+                      all_data0[ov_st + 1][1] - all_data0[ov_st][1]]
+    cos0 = cosine_similarity([vector0], [vector4connect])
+    id0 = 0
+    while cos0[0] < math.cos(10 * math.pi / 180):
+        id0 += 1
+        ov_st += 1
+        vector4connect = [all_data0[ov_st][0] - all_data0[ov_st - 1][0],
+                          all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
+        cos0 = cosine_similarity([vector0], [vector4connect])
+        if id0 > 50:
+            break
+    id1 = 0
+    cos1 = cosine_similarity([vector1], [vector4connect])
+    ov_st1 = ov_st1[0]
+    min_dis = distance(all_data0[ov_st][:2], all_data1[ov_st1 + 1][:2])
+    while cos1[0] < math.cos(10 * math.pi / 180) or min_dis < 0.1:
+        if id1 > 50:
+            break
+        ov_st += 1
+        id1 += 1
+        vector4connect = [all_data0[ov_st][0] - all_data0[ov_st - 1][0],
+                          all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
+        cos1 = cosine_similarity([vector1], [vector4connect])
+        _, ov_st1 = find_neighbor(all_data1, np.array(
+            [all_data0[ov_st][0], all_data0[ov_st][1]]).reshape(1, 2))
+        ov_st1 = ov_st1[0]
+        min_dis = distance(all_data0[ov_st][:2], all_data1[ov_st1 + 1][:2])
+    return ov_st, ov_st1
+
+
+def find_ed_in_overlap(ori_ov_ed, all_data0, all_data1):
+    ov_ed = ori_ov_ed
+    _, ov_ed1 = find_neighbor(all_data1, np.array(
+        [all_data0[ov_ed][0], all_data0[ov_ed][1]]).reshape(1, 2))
+    ov_ed1 = ov_ed1[0]
+    vector4ed = [all_data0[ov_ed][0] - all_data0[ov_ed - 1][0],
+                 all_data0[ov_ed][1] - all_data0[ov_ed - 1][1]]
+    vector1_ed = [all_data1[ov_ed1 + 1][0] - all_data0[ov_ed][0],
+                  all_data1[ov_ed1 + 1][1] - all_data0[ov_ed][1]]
+    id4ed = 0
+    cos4ed = cosine_similarity([vector4ed], [vector1_ed])
+
+    min_dis = distance(all_data0[ov_ed][:2], all_data1[ov_ed1 + 1][:2])
+    while cos4ed[0] < math.cos(10 * math.pi / 180) or min_dis < 0.1:
+        if id4ed > 50:
+            break
+        ov_ed -= 1
+        id4ed += 1
+        vector4ed = [all_data0[ov_ed][0] - all_data0[ov_ed - 1][0],
+                     all_data0[ov_ed][1] - all_data0[ov_ed - 1][1]]
+        cos4ed = cosine_similarity([vector4ed], [vector1_ed])
+        _, ov_ed1 = find_neighbor(all_data1, np.array(
+            [all_data0[ov_ed][0], all_data0[ov_ed][1]]).reshape(1, 2))
+        ov_ed1 = ov_ed1[0]
+        min_dis = distance(all_data0[ov_ed][:2], all_data1[ov_ed1 + 1][:2])
+    return ov_ed, ov_ed1
+
+
+def overlap_points(all_data0, all_data1):
+    all_x0 = all_data0[:, 0]
+    all_y0 = all_data0[:, 1]
+    all_x1 = all_data1[:, 0]
+    all_y1 = all_data1[:, 1]
+    width = (max(max(all_x0), max(all_x1)) - min(min(all_x0), min(all_x1))) / 10
+    height = (max(max(all_y0), max(all_y1)) - min(min(all_y0), min(all_y1))) / 10
+    dpi = 100
+    figure1 = plt.figure(figsize=(width, height), dpi=dpi)
+    # figure1 = plt.figure()
+    ax1 = plt.gca()  # figure1.add_axes([0, 0, width, height])
+    ax1.set_aspect(1)
+    # figure1.tight_layout(pad=0, w_pad=0, h_pad=0)
+    plt.axis('off')
+    # 设置坐标轴范围
+    plt.xlim((min(min(all_x0), min(all_x1)) - 1, max(max(all_x0), max(all_x1)) + 1))
+    plt.ylim((min(min(all_y0), min(all_y1)) - 1, max(max(all_y0), max(all_y1)) + 1))
+    ax1.plot(all_x0, all_y0, c='r', linewidth=10, markersize=1)
+    figure1.savefig("77.png", dpi=dpi, transparent=True)
+
+    figure2 = plt.figure(figsize=(width, height), dpi=dpi)
+    # figure2 = plt.figure()
+    plt.axis('off')
+    # figure2.tight_layout(pad=0, w_pad=0, h_pad=0)
+    ax2 = plt.gca()
+    ax2.set_aspect(1)
+    plt.xlim((min(min(all_x0), min(all_x1)) - 1, max(max(all_x0), max(all_x1)) + 1))
+    plt.ylim((min(min(all_y0), min(all_y1)) - 1, max(max(all_y0), max(all_y1)) + 1))
+    ax2.plot(all_x1, all_y1, c="r", linewidth=10, markersize=1)
+    figure2.savefig("88.png", dpi=dpi, transparent=True)
+    plt.show()
+
+    # convert real coordinate into picture
+    left = min(min(all_x0), min(all_x1))
+    right = max(max(all_x0), max(all_x1))
+    top = max(max(all_y0), max(all_y1))
+    bottom = min(min(all_y0), min(all_y1))
+    # read picture
+    img1 = cv.imread('77.png', 0)
+    img2 = cv.imread('88.png', 0)
+    ret1, grey1 = cv.threshold(img1, 127, 255, cv.THRESH_BINARY)
+    ret2, grey2 = cv.threshold(img2, 127, 255, cv.THRESH_BINARY)
+    all = cv.addWeighted(grey1, 0.5, grey2, 0.5, 0)
+    overlap = np.where(all == 0)
+    # cluster the points
+    all_label = [0]
+    label = 0
+    for k in range(len(overlap[0]) - 1):
+        if (overlap[0][k + 1] - overlap[0][k]) + (overlap[1][k + 1] - overlap[1][k]) <= 50:
+            all_label.append(label)
+        else:
+            label += 1
+            all_label.append(label)
+    # print(min(all_label), max(all_label))
+    img = np.where(all != 255)
+    img_y = img[0]
+    img_x = img[1]
+    img_top = min(img_y)
+    img_bottom = max(img_y)
+    img_right = max(img_x)
+    img_left = min(img_x)
+    # obtain the convert parameters
+    a = np.array([[img_left, 1, 0, 0], [img_right, 1, 0, 0], [0, 0, img_top, 1], [0, 0, img_bottom, 1]])
+    b = np.array([left, right, top, bottom])
+    coef = solve(a, b)
+    all_overlap = []
+    all_x = []
+    all_y = []
+    for i in range(len(overlap[0])):
+        y_pic = overlap[0][i]
+        x_pic = overlap[1][i]
+        x = coef[0] * x_pic + coef[1]
+        y = coef[2] * y_pic + coef[3]
+        if [x, y, all_label[i]] not in all_overlap:
+            all_overlap.append([x, y, all_label[i]])
+        all_x.append(x)
+        all_y.append(y)
+    # all the overlap points
+    plt.figure()
+    plt.plot(all_x0, all_y0, c='b')
+    plt.plot(all_x1, all_y1, c='b')
+    plt.scatter(all_x, all_y, c='r', s=1)
+    plt.show()
+
+    return all_label, all_overlap
+
+
+def overlap_od(all_label, all_overlap, all_data0, all_data1):
+    overlap_od0 = []
+    overlap_od1 = []
+    all_overlap = np.array(all_overlap)
+    for j in range(min(all_label), max(all_label) + 1):
+        same_class_id = np.where(all_overlap[:, 2] == j)
+        same_class = all_overlap[same_class_id]
+        _, loc0 = find_neighbor(all_data0, same_class)
+        _, loc1 = find_neighbor(all_data1, same_class)
+        st0_cp = min(loc0)
+        st1_cp = min(loc1)
+        ed0_cp = max(loc0)
+        ed1_cp = max(loc1)
+        v0 = [all_data0[max(loc0)][0] - all_data0[min(loc0)][0], all_data0[max(loc0)][1] - all_data0[min(loc0)][1]]
+        v1 = [all_data1[max(loc1)][0] - all_data1[min(loc1)][0], all_data1[max(loc1)][1] - all_data1[min(loc1)][1]]
+        if (loc0[0] - loc0[-1]) * (loc1[0] - loc1[-1]) < 0 or cosine_similarity([v0], [v1])[0][0] < math.cos(
+                10 * math.pi / 180):
+            continue
+        elif min(loc0) > st0_cp + 5 and min(loc1) > st1_cp + 5:
+            overlap_od0.append([min(loc0), max(loc0)])
+            overlap_od1.append([min(loc1), max(loc1)])
+        else:
+            if overlap_od0:
+                overlap_od0.remove(overlap_od0[-1])
+            if overlap_od1:
+                overlap_od1.remove(overlap_od1[-1])
+            overlap_od0.append([min(st0_cp, min(loc0)), max(max(loc0), ed0_cp)])
+            overlap_od1.append([min(st1_cp, min(loc1)), max(max(loc1), ed1_cp)])
+    return overlap_od0, overlap_od1

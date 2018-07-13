@@ -8,6 +8,7 @@ import math
 import os
 from rdp import rdp
 from scipy.spatial.distance import squareform, pdist
+import copy
 
 
 def delete_near_point(all_point, min_dis):
@@ -403,7 +404,7 @@ def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autove
     while True:
         slope = calculate_slope(all_point_final)
         after_concat = concat_stright(slope, all_point_final)
-        #after_concat = list(after_concat)
+        # after_concat = list(after_concat)
         if after_concat == all_point_final or abs(len(after_concat) - len(all_point_final)) == 1:
             break
         else:
@@ -575,3 +576,82 @@ def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autove
             all_segment_id.append(len(jw) - 1)
 
     return hmap, id4node, id4seg
+
+
+def check_key(hmap, key):
+    if hmap.__contains__(key):
+        key_value = hmap[key]
+    else:
+        key_value = []
+    return key_value
+
+
+def simple_merge(main_hmap, aux_hmap):
+    all_node0 = check_key(main_hmap, 'node_set')
+    all_segment0 = check_key(main_hmap, 'segment_set')
+    all_object_node0 = check_key(main_hmap, 'object_node_set')
+    all_object_seg0 = check_key(main_hmap, 'object_set')
+    main_debug_info = main_hmap['debug_info']
+    main_gps = main_hmap['is_coordinate_gps']
+    aux_debug_info = aux_hmap['debug_info']
+    aux_gps = aux_hmap['is_coordinate_gps']
+    if main_debug_info['lat_bias'] != aux_debug_info['lat_bias'] or main_debug_info['lng_bias'] != aux_debug_info[
+        'lng_bias']:
+        print('the bias are not the same!')
+        return False
+
+    all_node1 = check_key(aux_hmap, 'node_set')
+    all_segment1 = check_key(aux_hmap, 'segment_set')
+    all_object_node1 = check_key(aux_hmap, 'object_node_set')
+    all_object_seg1 = check_key(aux_hmap, 'object_set')
+
+    merge_hmap = {"debug_info": {"lat_bias": 0, "lng_bias": 0}, "is_coordinate_gps": 1, "lane_switch_set": [],
+                  "node_set": [], "segment_set": [], "object_node_set": [], "object_set": []}
+    merge_hmap['debug_info'] = main_debug_info
+    merge_hmap['is_coordinate_gps'] = main_gps
+    merge_hmap['node_set'] = all_node0
+
+    merge_hmap['segment_set'] = all_segment0
+    merge_hmap['object_node_set'] = all_object_node0
+    merge_hmap['object_set'] = all_object_seg0
+
+    main_node_len = len(all_node0)
+    main_seg_len = len(all_segment0)
+
+    main_object_node_len = len(all_object_node0)
+    main_object_seg_len = len(all_object_seg0)
+
+    all_node1_cp = all_node1.copy()
+    for i, node_in_aux in enumerate(all_node1_cp):
+        node_in_aux['id'] = main_node_len + i
+        node_in_aux['name'] = str(main_node_len + i)
+        merge_hmap['node_set'].append(node_in_aux)
+
+    all_object_node1_cp = all_object_node1.copy()
+    for m, obj_node_in_aux in enumerate(all_object_node1_cp):
+        obj_node_in_aux['id'] = main_object_node_len + m
+        obj_node_in_aux['name'] = str(main_object_node_len + m)
+        merge_hmap['object_node_set'].append(obj_node_in_aux)
+
+    all_segment1_cp = all_segment1.copy()
+    for j, segment_in_aux in enumerate(all_segment1_cp):
+        segment_in_aux['id'] = main_seg_len + j
+        segment_in_aux['name'] = "seg" + str(main_seg_len + j)
+        ori_node_list = segment_in_aux['lane_list'][0]['node_list']
+        ori_node_len = len(ori_node_list)
+        c = [float(main_node_len)] * ori_node_len
+        d = np.array(ori_node_list) + np.array(c)
+        segment_in_aux['lane_list'][0]['node_list'] = list(d)
+        merge_hmap['segment_set'].append(segment_in_aux)
+
+    all_object_seg1_cp = all_object_seg1.copy()
+    for n, obj_set_in_aux in enumerate(all_object_seg1_cp):
+        obj_set_in_aux['id'] = main_object_seg_len + n
+        obj_list = obj_set_in_aux['node_pair_list']
+        for node_line in obj_list:
+            ori_line = node_line['node_line']
+            p = np.array(ori_line) + np.array([float(main_object_node_len)] * 2)
+            node_line['node_line'] = list(p)
+
+        merge_hmap['object_set'].append(obj_set_in_aux)
+    return merge_hmap

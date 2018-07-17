@@ -9,13 +9,13 @@ import datetime
 
 gps = 0
 vslam = 0
-all_data0 = process_pcmap("11.pcmap", vslam, gps)
-all_data1 = process_pcmap("22.pcmap", vslam, gps)
+all_data0 = process_pcmap("1.pcmap", vslam, gps)
+all_data1 = process_pcmap("4.pcmap", vslam, gps)
 all_x0 = all_data0[:, 0]
 all_y0 = all_data0[:, 1]
 all_x1 = all_data1[:, 0]
 all_y1 = all_data1[:, 1]
-all_overlap = process_log.overlap_points(all_data0, all_data1)
+all_overlap, class_num = process_log.overlap_points(all_data0, all_data1)
 
 id4node = 0
 id4seg = 0
@@ -43,7 +43,7 @@ if all_overlap == [] or not all_overlap:
                                              autovel, weight, is_local, 0, 0)
     hmap = process_log.simple_merge(hmap, ano_hmap)
 else:
-    overlap_od0, overlap_od1 = process_log.overlap_od(all_overlap, all_data0, all_data1)
+    overlap_od0, overlap_od1 = process_log.overlap_od(all_overlap, class_num, all_data0, all_data1)
     real_ov_od0 = []
     real_ov_od1 = []
     # Generate a whole json file for hmap
@@ -115,7 +115,7 @@ else:
                         cos1 = cosine_similarity([vector1], [vector4connect])
                         min_dis = process_log.distance(all_data0[ov_st][:2], all_data1[ov_st1 - 1][:2])
                         while cos1[0] < 0.9:
-                            if id1 > 10 or min_dis < 0.1:
+                            if id1 > 50 or min_dis < 0.1:
                                 break
                             ov_st += 1
                             id1 += 1

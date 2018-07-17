@@ -808,6 +808,7 @@ def overlap_points(all_data0, all_data1):
     x_dif = np.diff(all_x)
     y_dif = np.diff(all_y)
     final_overlap = []
+    class_num = 1
     # only a seg in overlap
     if max(x_dif) < 3 and max(y_dif) < 3:
         final_overlap = all_overlap
@@ -826,6 +827,7 @@ def overlap_points(all_data0, all_data1):
                 final_overlap.append(overlap_seg)
             final_seg = all_overlap[x_break_id[-1][0] + 1:].tolist()
             final_overlap.append(final_seg)
+            class_num = len(final_overlap)
     else:
         y_break_id = np.where(y_dif > 3)
         if y_break_id:
@@ -840,6 +842,7 @@ def overlap_points(all_data0, all_data1):
                 final_overlap.append(overlap_seg)
             final_seg = all_overlap[y_break_id[-1][0] + 1:].tolist()
             final_overlap.append(final_seg)
+            class_num = len(final_overlap)
 
     # display all the overlap points
     plt.figure()
@@ -849,15 +852,18 @@ def overlap_points(all_data0, all_data1):
     plt.scatter(overlap_display[:, 0], overlap_display[:, 1], c='r', s=1)
     plt.show()
 
-    return final_overlap
+    return final_overlap, class_num
 
 
-def overlap_od(final_overlap, all_data0, all_data1):
+def overlap_od(final_overlap, class_num, all_data0, all_data1):
     overlap_od0 = []
     overlap_od1 = []
     final_overlap = np.array(final_overlap)
-    for j in range(len(final_overlap)):
-        same_class = final_overlap[j]
+    for j in range(class_num):
+        if class_num == 1:
+            same_class = final_overlap
+        else:
+            same_class = final_overlap[j]
         same_class = np.array(same_class)
         _, loc0 = find_neighbor(all_data0, same_class)
         _, loc1 = find_neighbor(all_data1, same_class)

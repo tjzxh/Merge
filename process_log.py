@@ -277,7 +277,7 @@ def distance(a, b):
 
 
 def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autovel, weight, is_local, id4node, id4seg):
-    if len(all_utm_time) <=1:
+    if len(all_utm_time) <= 1:
         pass
     else:
         speed = 5
@@ -468,7 +468,8 @@ def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autove
                 node_lng = longi[i]
                 node_hei = height[i]
                 node_vel = vel_for_point[i]
-                node = {"gps_weight": weight[0], "id": i + id4node, "lat": node_lat, "lng": node_lng, "max_vel": node_vel,
+                node = {"gps_weight": weight[0], "id": i + id4node, "lat": node_lat, "lng": node_lng,
+                        "max_vel": node_vel,
                         "lslam_carto_weight": weight[3], "name": str(i + id4node),
                         "qrcode_weight": weight[1], "radius": 0, "type": 17, "vslam_weight": weight[2],
                         "z": node_hei}
@@ -512,7 +513,8 @@ def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autove
             only_cur_segment = {"id": id4seg, "lane_list": [
                 {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur,
                  "name": "Path" + str(id4seg),
-                 "node_list": list(range(0 + offset4seg, len(jw) + offset4seg)), "right_line_type": 1, "seg_id": id4seg}],
+                 "node_list": list(range(0 + offset4seg, len(jw) + offset4seg)), "right_line_type": 1,
+                 "seg_id": id4seg}],
                                 "name": "seg" + str(id4seg)}
             id4seg += 1
             hmap["segment_set"].append(only_cur_segment)
@@ -529,7 +531,8 @@ def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autove
                     all_segment_id.append(second_id)
                 # Generate the stright segment
                 str_segment = {"id": id4seg, "lane_list": [
-                    {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_str, "name": "Path" + str(id4seg),
+                    {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_str,
+                     "name": "Path" + str(id4seg),
                      "node_list": list(range(first_id + offset4seg, second_id + 1 + offset4seg)), "right_line_type": 1,
                      "seg_id": id4seg}],
                                "name": "seg" + str(id4seg)}
@@ -542,7 +545,8 @@ def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autove
                     cur_segment = {"id": id4seg, "lane_list": [
                         {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur,
                          "name": "Path" + str(id4seg),
-                         "node_list": list(range(second_id + offset4seg, third_id + 1 + offset4seg)), "right_line_type": 1,
+                         "node_list": list(range(second_id + offset4seg, third_id + 1 + offset4seg)),
+                         "right_line_type": 1,
                          "seg_id": id4seg}],
                                    "name": "seg" + str(id4seg)}
                     id4seg += 1
@@ -555,7 +559,8 @@ def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autove
             else:
                 # Generate the first curve segment
                 first_cur_segment = {"id": id4seg, "lane_list": [
-                    {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur, "name": "Path" + str(id4seg),
+                    {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur,
+                     "name": "Path" + str(id4seg),
                      "node_list": list(range(0 + offset4seg, f_id + 1 + offset4seg)), "right_line_type": 1,
                      "seg_id": id4seg}],
                                      "name": "seg" + str(id4seg)}
@@ -570,7 +575,8 @@ def single_dump(all_utm_time, hmap, width, max_vel_str, max_vel_cur, gps, autove
             else:
                 # Generate the last curve segment
                 last_cur_segment = {"id": id4seg, "lane_list": [
-                    {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur, "name": "Path" + str(id4seg),
+                    {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": vel_cur,
+                     "name": "Path" + str(id4seg),
                      "node_list": list(range(last_id + offset4seg, len(jw) + offset4seg)), "right_line_type": 1,
                      "seg_id": id4seg}],
                                     "name": "seg" + str(id4seg)}
@@ -664,27 +670,27 @@ def find_st_in_overlap(ori_st_ed, all_data0, all_data1):
     ov_st = ori_st_ed
     _, ov_st1 = find_neighbor(all_data1, np.array(
         [all_data0[ov_st][0], all_data0[ov_st][1]]).reshape(1, 2))
+    ov_st1 = ov_st1[0]
     vector0 = [all_data0[ov_st][0] - all_data0[ov_st - 1][0],
                all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
     vector1 = [all_data0[ov_st][0] - all_data1[ov_st1 - 1][0],
                all_data0[ov_st][1] - all_data1[ov_st1 - 1][1]]
     vector4connect = [all_data0[ov_st + 1][0] - all_data0[ov_st][0],
                       all_data0[ov_st + 1][1] - all_data0[ov_st][1]]
-    cos0 = cosine_similarity([vector0], [vector4connect])
-    id0 = 0
-    while cos0[0] < math.cos(10 * math.pi / 180):
-        id0 += 1
-        ov_st += 1
-        vector4connect = [all_data0[ov_st][0] - all_data0[ov_st - 1][0],
-                          all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
-        cos0 = cosine_similarity([vector0], [vector4connect])
-        if id0 > 50:
-            break
+    # cos0 = cosine_similarity([vector0], [vector4connect])
+    # id0 = 0
+    # while cos0[0] < math.cos(10 * math.pi / 180):
+    #     id0 += 1
+    #     ov_st += 1
+    #     vector4connect = [all_data0[ov_st][0] - all_data0[ov_st - 1][0],
+    #                       all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
+    #     cos0 = cosine_similarity([vector0], [vector4connect])
+    #     if id0 > 10:
+    #         break
     id1 = 0
     cos1 = cosine_similarity([vector1], [vector4connect])
-    ov_st1 = ov_st1[0]
     min_dis = distance(all_data0[ov_st][:2], all_data1[ov_st1 + 1][:2])
-    while cos1[0] < math.cos(10 * math.pi / 180) or min_dis < 0.1:
+    while cos1[0] < 0.9 or min_dis < 0.1:
         if id1 > 50:
             break
         ov_st += 1
@@ -712,7 +718,7 @@ def find_ed_in_overlap(ori_ov_ed, all_data0, all_data1):
     cos4ed = cosine_similarity([vector4ed], [vector1_ed])
 
     min_dis = distance(all_data0[ov_ed][:2], all_data1[ov_ed1 + 1][:2])
-    while cos4ed[0] < math.cos(10 * math.pi / 180) or min_dis < 0.1:
+    while cos4ed[0] < 0.9 or min_dis < 0.1:
         if id4ed > 50:
             break
         ov_ed -= 1
@@ -764,7 +770,7 @@ def overlap_points(all_data0, all_data1):
     right = max(max(all_x0), max(all_x1))
     top = max(max(all_y0), max(all_y1))
     bottom = min(min(all_y0), min(all_y1))
-    # read picture
+    # read picture and find overlap area
     img1 = cv.imread('77.png', 0)
     img2 = cv.imread('88.png', 0)
     ret1, grey1 = cv.threshold(img1, 127, 255, cv.THRESH_BINARY)
@@ -772,15 +778,6 @@ def overlap_points(all_data0, all_data1):
     all = cv.addWeighted(grey1, 0.5, grey2, 0.5, 0)
     overlap = np.where(all == 0)
     # cluster the points
-    all_label = [0]
-    label = 0
-    for k in range(len(overlap[0]) - 1):
-        if (overlap[0][k + 1] - overlap[0][k]) + (overlap[1][k + 1] - overlap[1][k]) <= 50:
-            all_label.append(label)
-        else:
-            label += 1
-            all_label.append(label)
-    # print(min(all_label), max(all_label))
     img = np.where(all != 255)
     img_y = img[0]
     img_x = img[1]
@@ -800,46 +797,76 @@ def overlap_points(all_data0, all_data1):
         x_pic = overlap[1][i]
         x = coef[0] * x_pic + coef[1]
         y = coef[2] * y_pic + coef[3]
-        if [x, y, all_label[i]] not in all_overlap:
-            all_overlap.append([x, y, all_label[i]])
-        all_x.append(x)
-        all_y.append(y)
-    # all the overlap points
+        if [x, y] not in all_overlap:
+            all_overlap.append([x, y])
+            all_x.append(x)
+            all_y.append(y)
+    overlap_display = all_overlap
+    # find the breakpoint and cluster the overlap
+    all_x.sort()
+    all_y.sort()
+    x_dif = np.diff(all_x)
+    y_dif = np.diff(all_y)
+    final_overlap = []
+    # only a seg in overlap
+    if max(x_dif) < 3 and max(y_dif) < 3:
+        final_overlap = all_overlap
+    # otherwise cluster
+    elif max(x_dif) > max(y_dif):
+        x_break_id = np.where(x_dif > 3)
+        if x_break_id:
+            all_overlap.sort(key=lambda x: x[0])
+            all_overlap = np.array(all_overlap)
+            for ind, k in enumerate(x_break_id):
+                k = k[0]
+                if ind == 0:
+                    overlap_seg = all_overlap[:k + 1].tolist()
+                else:
+                    overlap_seg = all_overlap[x_break_id[ind - 1][0] + 1:k + 1].tolist()
+                final_overlap.append(overlap_seg)
+            final_seg = all_overlap[x_break_id[-1][0] + 1:].tolist()
+            final_overlap.append(final_seg)
+    else:
+        y_break_id = np.where(y_dif > 3)
+        if y_break_id:
+            all_overlap.sort(key=lambda x: x[1])
+            all_overlap = np.array(all_overlap)
+            for ind, k in enumerate(y_break_id):
+                k = k[0]
+                if ind == 0:
+                    overlap_seg = all_overlap[:k + 1].tolist()
+                else:
+                    overlap_seg = all_overlap[y_break_id[ind - 1][0] + 1:k + 1].tolist()
+                final_overlap.append(overlap_seg)
+            final_seg = all_overlap[y_break_id[-1][0] + 1:].tolist()
+            final_overlap.append(final_seg)
+
+    # display all the overlap points
     plt.figure()
     plt.plot(all_x0, all_y0, c='b')
     plt.plot(all_x1, all_y1, c='b')
-    plt.scatter(all_x, all_y, c='r', s=1)
+    overlap_display = np.array(overlap_display)
+    plt.scatter(overlap_display[:, 0], overlap_display[:, 1], c='r', s=1)
     plt.show()
 
-    return all_label, all_overlap
+    return final_overlap
 
 
-def overlap_od(all_label, all_overlap, all_data0, all_data1):
+def overlap_od(final_overlap, all_data0, all_data1):
     overlap_od0 = []
     overlap_od1 = []
-    all_overlap = np.array(all_overlap)
-    for j in range(min(all_label), max(all_label) + 1):
-        same_class_id = np.where(all_overlap[:, 2] == j)
-        same_class = all_overlap[same_class_id]
+    final_overlap = np.array(final_overlap)
+    for j in range(len(final_overlap)):
+        same_class = final_overlap[j]
+        same_class = np.array(same_class)
         _, loc0 = find_neighbor(all_data0, same_class)
         _, loc1 = find_neighbor(all_data1, same_class)
-        st0_cp = min(loc0)
-        st1_cp = min(loc1)
-        ed0_cp = max(loc0)
-        ed1_cp = max(loc1)
         v0 = [all_data0[max(loc0)][0] - all_data0[min(loc0)][0], all_data0[max(loc0)][1] - all_data0[min(loc0)][1]]
         v1 = [all_data1[max(loc1)][0] - all_data1[min(loc1)][0], all_data1[max(loc1)][1] - all_data1[min(loc1)][1]]
         if (loc0[0] - loc0[-1]) * (loc1[0] - loc1[-1]) < 0 or cosine_similarity([v0], [v1])[0][0] < math.cos(
                 10 * math.pi / 180):
             continue
-        elif min(loc0) > st0_cp + 5 and min(loc1) > st1_cp + 5:
+        else:
             overlap_od0.append([min(loc0), max(loc0)])
             overlap_od1.append([min(loc1), max(loc1)])
-        else:
-            if overlap_od0:
-                overlap_od0.remove(overlap_od0[-1])
-            if overlap_od1:
-                overlap_od1.remove(overlap_od1[-1])
-            overlap_od0.append([min(st0_cp, min(loc0)), max(max(loc0), ed0_cp)])
-            overlap_od1.append([min(st1_cp, min(loc1)), max(max(loc1), ed1_cp)])
     return overlap_od0, overlap_od1

@@ -9,13 +9,13 @@ import datetime
 
 gps = 0
 vslam = 0
-all_data0 = process_pcmap("2.pcmap", vslam, gps)
-all_data1 = process_pcmap("3.pcmap", vslam, gps)
+all_data0 = process_pcmap("11.pcmap", vslam, gps)
+all_data1 = process_pcmap("22.pcmap", vslam, gps)
 all_x0 = all_data0[:, 0]
 all_y0 = all_data0[:, 1]
 all_x1 = all_data1[:, 0]
 all_y1 = all_data1[:, 1]
-all_label, all_overlap = process_log.overlap_points(all_data0, all_data1)
+all_overlap = process_log.overlap_points(all_data0, all_data1)
 
 id4node = 0
 id4seg = 0
@@ -43,7 +43,7 @@ if all_overlap == [] or not all_overlap:
                                              autovel, weight, is_local, 0, 0)
     hmap = process_log.simple_merge(hmap, ano_hmap)
 else:
-    overlap_od0, overlap_od1 = process_log.overlap_od(all_label, all_overlap, all_data0, all_data1)
+    overlap_od0, overlap_od1 = process_log.overlap_od(all_overlap, all_data0, all_data1)
     real_ov_od0 = []
     real_ov_od1 = []
     # Generate a whole json file for hmap
@@ -63,16 +63,17 @@ else:
         hmap = process_log.simple_merge(hmap, ano_hmap)
     else:
         # display overlap seg
-        fig = plt.figure()
-        overlap_data0 = all_data0[overlap_od0[0][0]:overlap_od0[0][1]]
-        overlap_data1 = all_data1[overlap_od1[0][0]:overlap_od1[0][1]]
-        plt.subplot(121)
-        plt.plot(all_x0, all_y0, c='b')
-        plt.scatter(overlap_data0[:, 0], overlap_data0[:, 1], c='r')
-        plt.subplot(122)
-        plt.plot(all_x1, all_y1, c='b')
-        plt.scatter(overlap_data1[:, 0], overlap_data1[:, 1], c='lime')
-        plt.show()
+        for p in range(len(overlap_od0)):
+            fig = plt.figure()
+            overlap_data0 = all_data0[overlap_od0[p][0]:overlap_od0[p][1]]
+            overlap_data1 = all_data1[overlap_od1[p][0]:overlap_od1[p][1]]
+            plt.subplot(121)
+            plt.plot(all_x0, all_y0, c='b')
+            plt.scatter(overlap_data0[:, 0], overlap_data0[:, 1], c='r')
+            plt.subplot(122)
+            plt.plot(all_x1, all_y1, c='b')
+            plt.scatter(overlap_data1[:, 0], overlap_data1[:, 1], c='lime')
+            plt.show()
         # handle all the overlap seg
         # if the original point of overlap is the first point of trajectory
         for d in range(len(overlap_od0)):
@@ -89,23 +90,19 @@ else:
                     ov_st1 = 0
                 else:
                     ov_st = overlap_od0[0][0]
-                    _, ov_st1 = process_log.find_neighbor(all_data1, np.array(
-                        [all_data0[ov_st][0], all_data0[ov_st][1]]).reshape(1, 2))
-                    ov_st1 = ov_st1[0]
+                    ov_st1 = overlap_od1[0][0]
                     if overlap_od0[0][0] != 0:
                         vector0 = [all_data0[ov_st][0] - all_data0[ov_st - 1][0],
                                    all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
                     if overlap_od1[0][0] != 0:
                         vector1 = [all_data0[ov_st][0] - all_data1[ov_st1 - 1][0],
                                    all_data0[ov_st][1] - all_data1[ov_st1 - 1][1]]
-
-                    ov_st = overlap_od0[d][0]
                     vector4connect = [all_data0[ov_st + 1][0] - all_data0[ov_st][0],
                                       all_data0[ov_st + 1][1] - all_data0[ov_st][1]]
                     if overlap_od0[0][0] != 0:
                         cos0 = cosine_similarity([vector0], [vector4connect])
                         id0 = 0
-                        while cos0[0] < math.cos(10 * math.pi / 180):
+                        while cos0[0] < 0.9:
                             id0 += 1
                             ov_st += 1
                             vector4connect = [all_data0[ov_st + 1][0] - all_data0[ov_st][0],
@@ -117,8 +114,8 @@ else:
                         id1 = 0
                         cos1 = cosine_similarity([vector1], [vector4connect])
                         min_dis = process_log.distance(all_data0[ov_st][:2], all_data1[ov_st1 - 1][:2])
-                        while cos1[0] < math.cos(10 * math.pi / 180):
-                            if id1 > 50 or min_dis < 0.1:
+                        while cos1[0] < 0.9:
+                            if id1 > 10 or min_dis < 0.1:
                                 break
                             ov_st += 1
                             id1 += 1
@@ -172,37 +169,9 @@ else:
                 overlap0 = all_data0[ov_st:ov_ed]
                 hmap, id4node, id4seg = process_log.single_dump(overlap0, hmap, width, max_vel_str, max_vel_cur, gps,
                                                                 autovel, weight, is_local, id4node, id4seg)
-            # the last overlap
-            if d == len(overlap_od0) - 1:
-                id4final = id4node - 1
-                if process_log.distance(all_data0[ov_ed][:2], all_data0[-1][:2]) < 0.5:
-                    ov_ed = -1
-                if process_log.distance(all_data1[ov_ed1][:2], all_data1[-1][:2]) < 0.5:
-                    ov_ed1 = -1
-                if ov_ed < len(all_data0) - 1 or ov_ed != -1:
-                    final_connect_seg0 = {"id": id4seg, "lane_list": [
-                        {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": max_vel_str,
-                         "name": "Path" + str(id4seg),
-                         "node_list": [id4final, id4node], "right_line_type": 1,
-                         "seg_id": id4seg}], "name": "seg" + str(id4seg)}
-                    id4seg += 1
-                    hmap["segment_set"].append(final_connect_seg0)
-                    final_data0 = all_data0[ov_ed:]
-                    hmap, id4node, id4seg = process_log.single_dump(final_data0, hmap, width, max_vel_str, max_vel_cur, gps,
-                                                                    autovel, weight, is_local, id4node, id4seg)
-                if ov_ed1 < len(all_data1) - 1 or ov_ed1 != -1:
-                    final_connect_seg1 = {"id": id4seg, "lane_list": [
-                        {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": max_vel_str,
-                         "name": "Path" + str(id4seg),
-                         "node_list": [id4final, id4node], "right_line_type": 1,
-                         "seg_id": id4seg}], "name": "seg" + str(id4seg)}
-                    id4seg += 1
-                    hmap["segment_set"].append(final_connect_seg1)
-                    final_data1 = all_data1[ov_ed1:]
-                    hmap, id4node, id4seg = process_log.single_dump(final_data1, hmap, width, max_vel_str, max_vel_cur, gps,
-                                                                    autovel, weight, is_local, id4node, id4seg)
+
             # the middle part of overlap
-            if d != 0 and d != len(overlap_od0) - 1:
+            if len(overlap_od0) > 1 and d != 0:
                 id4connect_f = id4node - 1
                 ov_st, ov_st1 = process_log.find_st_in_overlap(overlap_od0[d][0], all_data0, all_data1)
                 ov_ed, ov_ed1 = process_log.find_ed_in_overlap(overlap_od0[d][1], all_data0, all_data1)
@@ -251,6 +220,41 @@ else:
                 overlap = all_data0[real_ov_od0[d][0]:real_ov_od0[d][1]]
                 hmap, id4node, id4seg = process_log.single_dump(overlap, hmap, width, max_vel_str, max_vel_cur, gps,
                                                                 autovel, weight, is_local, id4node, id4seg)
+            # the last overlap
+            if d == len(overlap_od0) - 1:
+                id4final = id4node - 1
+                ov_st, ov_st1 = process_log.find_st_in_overlap(overlap_od0[d][0], all_data0, all_data1)
+                ov_ed, ov_ed1 = process_log.find_ed_in_overlap(overlap_od0[d][1], all_data0, all_data1)
+                real_ov_od0.append([ov_st, ov_ed])
+                real_ov_od1.append([ov_st1, ov_ed1])
+                if process_log.distance(all_data0[ov_ed][:2], all_data0[-1][:2]) < 0.5:
+                    ov_ed = -1
+                if process_log.distance(all_data1[ov_ed1][:2], all_data1[-1][:2]) < 0.5:
+                    ov_ed1 = -1
+                if ov_ed != -1:
+                    final_connect_seg0 = {"id": id4seg, "lane_list": [
+                        {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": max_vel_str,
+                         "name": "Path" + str(id4seg),
+                         "node_list": [id4final, id4node], "right_line_type": 1,
+                         "seg_id": id4seg}], "name": "seg" + str(id4seg)}
+                    id4seg += 1
+                    hmap["segment_set"].append(final_connect_seg0)
+                    final_data0 = all_data0[ov_ed:]
+                    hmap, id4node, id4seg = process_log.single_dump(final_data0, hmap, width, max_vel_str,
+                                                                    max_vel_cur, gps,
+                                                                    autovel, weight, is_local, id4node, id4seg)
+                if ov_ed1 != -1:
+                    final_connect_seg1 = {"id": id4seg, "lane_list": [
+                        {"id": 0, "lane_width": width, "left_line_type": 1, "max_vel": max_vel_str,
+                         "name": "Path" + str(id4seg),
+                         "node_list": [id4final, id4node], "right_line_type": 1,
+                         "seg_id": id4seg}], "name": "seg" + str(id4seg)}
+                    id4seg += 1
+                    hmap["segment_set"].append(final_connect_seg1)
+                    final_data1 = all_data1[ov_ed1:]
+                    hmap, id4node, id4seg = process_log.single_dump(final_data1, hmap, width, max_vel_str,
+                                                                    max_vel_cur, gps,
+                                                                    autovel, weight, is_local, id4node, id4seg)
 
 
 class MyEncoder(json.JSONEncoder):

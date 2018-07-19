@@ -3,14 +3,13 @@ from process_log import process_pcmap
 import process_log
 import numpy as np
 import json
-import math
 from sklearn.metrics.pairwise import cosine_similarity
 import datetime
 
 gps = 0
 vslam = 0
-all_data0 = process_pcmap("1.pcmap", vslam, gps)
-all_data1 = process_pcmap("4.pcmap", vslam, gps)
+all_data0 = process_pcmap("44.pcmap", vslam, gps)
+all_data1 = process_pcmap("55.pcmap", vslam, gps)
 all_x0 = all_data0[:, 0]
 all_y0 = all_data0[:, 1]
 all_x1 = all_data1[:, 0]
@@ -42,6 +41,7 @@ if all_overlap == [] or not all_overlap:
     ano_hmap, _, _ = process_log.single_dump(all_data1, ano_hmap, width, max_vel_str, max_vel_cur, gps,
                                              autovel, weight, is_local, 0, 0)
     hmap = process_log.simple_merge(hmap, ano_hmap)
+    print("There is no overlap, only simple merge!")
 else:
     overlap_od0, overlap_od1 = process_log.overlap_od(all_overlap, class_num, all_data0, all_data1)
     real_ov_od0 = []
@@ -61,6 +61,7 @@ else:
         ano_hmap, _, _ = process_log.single_dump(all_data1, ano_hmap, width, max_vel_str, max_vel_cur, gps,
                                                  autovel, weight, is_local, 0, 0)
         hmap = process_log.simple_merge(hmap, ano_hmap)
+        print("There is no overlap, only simple merge!")
     else:
         # display overlap seg
         for p in range(len(overlap_od0)):
@@ -102,20 +103,20 @@ else:
                     if overlap_od0[0][0] != 0:
                         cos0 = cosine_similarity([vector0], [vector4connect])
                         id0 = 0
-                        while cos0[0] < 0.9:
+                        while cos0[0] < 0.8:
                             id0 += 1
                             ov_st += 1
                             vector4connect = [all_data0[ov_st + 1][0] - all_data0[ov_st][0],
                                               all_data0[ov_st + 1][1] - all_data0[ov_st][1]]
                             cos0 = cosine_similarity([vector0], [vector4connect])
-                            if id0 > 50:
+                            if id0 > 10:
                                 break
                     if overlap_od1[0][0] != 0:
                         id1 = 0
                         cos1 = cosine_similarity([vector1], [vector4connect])
                         min_dis = process_log.distance(all_data0[ov_st][:2], all_data1[ov_st1 - 1][:2])
-                        while cos1[0] < 0.9:
-                            if id1 > 50 or min_dis < 0.1:
+                        while cos1[0] < 0.8:
+                            if id1 > 10 or min_dis < 0.1:
                                 break
                             ov_st += 1
                             id1 += 1
@@ -123,9 +124,9 @@ else:
                             vector4connect = [all_data0[ov_st + 1][0] - all_data0[ov_st][0],
                                               all_data0[ov_st + 1][1] - all_data0[ov_st][1]]
                             cos1 = cosine_similarity([vector1], [vector4connect])
-                            _, ov_st1 = process_log.find_neighbor(all_data1, np.array(
-                                [all_data0[ov_st][0], all_data0[ov_st][1]]).reshape(1, 2))
-                            ov_st1 = ov_st1[0]
+                            # _, ov_st1 = process_log.find_neighbor(all_data1, np.array(
+                            #     [all_data0[ov_st][0], all_data0[ov_st][1]]).reshape(1, 2))
+                            # ov_st1 = ov_st1[0]
                             min_dis = process_log.distance(all_data0[ov_st][:2], all_data1[ov_st1 + 1][:2])
                     # dump the first seg
                     if overlap_od0[0][0] != 0:

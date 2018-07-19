@@ -677,30 +677,20 @@ def find_st_in_overlap(ori_st_ed, all_data0, all_data1):
                all_data0[ov_st][1] - all_data1[ov_st1 - 1][1]]
     vector4connect = [all_data0[ov_st + 1][0] - all_data0[ov_st][0],
                       all_data0[ov_st + 1][1] - all_data0[ov_st][1]]
-    # cos0 = cosine_similarity([vector0], [vector4connect])
-    # id0 = 0
-    # while cos0[0] < math.cos(10 * math.pi / 180):
-    #     id0 += 1
-    #     ov_st += 1
-    #     vector4connect = [all_data0[ov_st][0] - all_data0[ov_st - 1][0],
-    #                       all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
-    #     cos0 = cosine_similarity([vector0], [vector4connect])
-    #     if id0 > 10:
-    #         break
     id1 = 0
     cos1 = cosine_similarity([vector1], [vector4connect])
     min_dis = distance(all_data0[ov_st][:2], all_data1[ov_st1 + 1][:2])
-    while cos1[0] < 0.9 or min_dis < 0.1:
-        if id1 > 50:
+    while cos1[0] < 0.8 or min_dis < 0.1:
+        if id1 > 10:
             break
         ov_st += 1
         id1 += 1
         vector4connect = [all_data0[ov_st][0] - all_data0[ov_st - 1][0],
                           all_data0[ov_st][1] - all_data0[ov_st - 1][1]]
         cos1 = cosine_similarity([vector1], [vector4connect])
-        _, ov_st1 = find_neighbor(all_data1, np.array(
-            [all_data0[ov_st][0], all_data0[ov_st][1]]).reshape(1, 2))
-        ov_st1 = ov_st1[0]
+        # _, ov_st1 = find_neighbor(all_data1, np.array(
+        #     [all_data0[ov_st][0], all_data0[ov_st][1]]).reshape(1, 2))
+        # ov_st1 = ov_st1[0]
         min_dis = distance(all_data0[ov_st][:2], all_data1[ov_st1 + 1][:2])
     return ov_st, ov_st1
 
@@ -718,17 +708,17 @@ def find_ed_in_overlap(ori_ov_ed, all_data0, all_data1):
     cos4ed = cosine_similarity([vector4ed], [vector1_ed])
 
     min_dis = distance(all_data0[ov_ed][:2], all_data1[ov_ed1 + 1][:2])
-    while cos4ed[0] < 0.9 or min_dis < 0.1:
-        if id4ed > 50:
+    while cos4ed[0] < 0.8 or min_dis < 0.1:
+        if id4ed > 10:
             break
         ov_ed -= 1
         id4ed += 1
         vector4ed = [all_data0[ov_ed][0] - all_data0[ov_ed - 1][0],
                      all_data0[ov_ed][1] - all_data0[ov_ed - 1][1]]
         cos4ed = cosine_similarity([vector4ed], [vector1_ed])
-        _, ov_ed1 = find_neighbor(all_data1, np.array(
-            [all_data0[ov_ed][0], all_data0[ov_ed][1]]).reshape(1, 2))
-        ov_ed1 = ov_ed1[0]
+        # _, ov_ed1 = find_neighbor(all_data1, np.array(
+        #     [all_data0[ov_ed][0], all_data0[ov_ed][1]]).reshape(1, 2))
+        # ov_ed1 = ov_ed1[0]
         min_dis = distance(all_data0[ov_ed][:2], all_data1[ov_ed1 + 1][:2])
     return ov_ed, ov_ed1
 
@@ -801,56 +791,59 @@ def overlap_points(all_data0, all_data1):
             all_overlap.append([x, y])
             all_x.append(x)
             all_y.append(y)
-    overlap_display = all_overlap
-    # find the breakpoint and cluster the overlap
-    all_x.sort()
-    all_y.sort()
-    x_dif = np.diff(all_x)
-    y_dif = np.diff(all_y)
-    final_overlap = []
-    class_num = 1
-    # only a seg in overlap
-    if max(x_dif) < 3 and max(y_dif) < 3:
-        final_overlap = all_overlap
-    # otherwise cluster
-    elif max(x_dif) > max(y_dif):
-        x_break_id = np.where(x_dif > 3)
-        if x_break_id:
-            all_overlap.sort(key=lambda x: x[0])
-            all_overlap = np.array(all_overlap)
-            for ind, k in enumerate(x_break_id):
-                k = k[0]
-                if ind == 0:
-                    overlap_seg = all_overlap[:k + 1].tolist()
-                else:
-                    overlap_seg = all_overlap[x_break_id[ind - 1][0] + 1:k + 1].tolist()
-                final_overlap.append(overlap_seg)
-            final_seg = all_overlap[x_break_id[-1][0] + 1:].tolist()
-            final_overlap.append(final_seg)
-            class_num = len(final_overlap)
-    else:
-        y_break_id = np.where(y_dif > 3)
-        if y_break_id:
-            all_overlap.sort(key=lambda x: x[1])
-            all_overlap = np.array(all_overlap)
-            for ind, k in enumerate(y_break_id):
-                k = k[0]
-                if ind == 0:
-                    overlap_seg = all_overlap[:k + 1].tolist()
-                else:
-                    overlap_seg = all_overlap[y_break_id[ind - 1][0] + 1:k + 1].tolist()
-                final_overlap.append(overlap_seg)
-            final_seg = all_overlap[y_break_id[-1][0] + 1:].tolist()
-            final_overlap.append(final_seg)
-            class_num = len(final_overlap)
 
-    # display all the overlap points
-    plt.figure()
-    plt.plot(all_x0, all_y0, c='b')
-    plt.plot(all_x1, all_y1, c='b')
-    overlap_display = np.array(overlap_display)
-    plt.scatter(overlap_display[:, 0], overlap_display[:, 1], c='r', s=1)
-    plt.show()
+    final_overlap = []
+    class_num = 0
+    if all_overlap:
+        overlap_display = all_overlap
+        # find the breakpoint and cluster the overlap
+        all_x.sort()
+        all_y.sort()
+        x_dif = np.diff(all_x)
+        y_dif = np.diff(all_y)
+        class_num = 1
+        # only a seg in overlap
+        if max(x_dif) < 3 and max(y_dif) < 3:
+            final_overlap = all_overlap
+        # otherwise cluster
+        elif max(x_dif) > max(y_dif):
+            x_break_id = np.where(x_dif > 3)
+            if x_break_id:
+                all_overlap.sort(key=lambda x: x[0])
+                all_overlap = np.array(all_overlap)
+                for ind, k in enumerate(x_break_id):
+                    k = k[0]
+                    if ind == 0:
+                        overlap_seg = all_overlap[:k + 1].tolist()
+                    else:
+                        overlap_seg = all_overlap[x_break_id[ind - 1][0] + 1:k + 1].tolist()
+                    final_overlap.append(overlap_seg)
+                final_seg = all_overlap[x_break_id[-1][0] + 1:].tolist()
+                final_overlap.append(final_seg)
+                class_num = len(final_overlap)
+        else:
+            y_break_id = np.where(y_dif > 3)
+            if y_break_id:
+                all_overlap.sort(key=lambda x: x[1])
+                all_overlap = np.array(all_overlap)
+                for ind, k in enumerate(y_break_id):
+                    k = k[0]
+                    if ind == 0:
+                        overlap_seg = all_overlap[:k + 1].tolist()
+                    else:
+                        overlap_seg = all_overlap[y_break_id[ind - 1][0] + 1:k + 1].tolist()
+                    final_overlap.append(overlap_seg)
+                final_seg = all_overlap[y_break_id[-1][0] + 1:].tolist()
+                final_overlap.append(final_seg)
+                class_num = len(final_overlap)
+
+        # display all the overlap points
+        plt.figure()
+        plt.plot(all_x0, all_y0, c='b')
+        plt.plot(all_x1, all_y1, c='b')
+        overlap_display = np.array(overlap_display)
+        plt.scatter(overlap_display[:, 0], overlap_display[:, 1], c='r', s=1)
+        plt.show()
 
     return final_overlap, class_num
 
